@@ -466,16 +466,6 @@
 "use strict";C3.JobSchedulerRuntime=class extends C3.DefendedBase{constructor(a,b){super(),this._runtime=a,this._jobPromises=new Map,this._nextJobId=0,this._inputPort=b["inputPort"],b["outputPort"].onmessage=(a)=>this._OnJobWorkerMessage(a),this._maxNumWorkers=b["maxNumWorkers"],this._jobWorkerCount=1,this._isCreatingWorker=!1,this._hadErrorCreatingWorker=!1,this._isBroken=!1,this._testOkResolve=null}async Init(){await this._TestMessageChannelWorks()}ImportScriptsToJobWorkers(a){this._isBroken||this._inputPort.postMessage({"type":"_import_scripts","scripts":a})}SendBlobToJobWorkers(a,b){this._isBroken||this._inputPort.postMessage({"type":"_send_blob","blob":a,"id":b})}SendBufferToJobWorkers(a,b){this._isBroken||this._inputPort.postMessage({"type":"_send_buffer","buffer":a,"id":b},[a])}AddJob(a,b,c,d,e){if(this._isBroken)return Promise.reject("messagechannels broken");c||(c=[]);const f=this._nextJobId++,g={"type":a,"isBroadcast":!1,"jobId":f,"params":b,"transferables":c},h=new Promise((a,b)=>{this._jobPromises.set(f,{resolve:a,progress:d,reject:b,cancelled:!1})});return e&&e.SetAction(()=>this._CancelJob(f)),this._inputPort.postMessage(g,c),this._MaybeCreateExtraWorker(),h}BroadcastJob(a,b,c){if(!this._isBroken){c||(c=[]);const d=this._nextJobId++,e={"type":a,"isBroadcast":!0,"jobId":d,"params":b,"transferables":c};this._inputPort.postMessage(e,c)}}_CancelJob(a){const b=this._jobPromises.get(a);b&&(b.cancelled=!0,b.resolve=null,b.progress=null,b.reject=null,this._inputPort.postMessage({"type":"_cancel","jobId":a}))}_OnJobWorkerMessage(a){const b=a.data,c=b["type"],d=b["jobId"];switch(c){case"result":this._OnJobResult(d,b["result"]);break;case"progress":this._OnJobProgress(d,b["progress"]);break;case"error":this._OnJobError(d,b["error"]);break;case"ready":this._OnJobWorkerReady();break;case"_testMessageChannelOk":this._OnTestMessageChannelOk();break;default:throw new Error(`unknown message from worker '${c}'`);}}_OnJobResult(a,b){const c=this._jobPromises.get(a);if(!c)throw new Error("invalid job ID");c.cancelled||c.resolve(b),this._jobPromises.delete(a)}_OnJobProgress(a,b){const c=this._jobPromises.get(a);if(!c)throw new Error("invalid job ID");!c.cancelled&&c.progress&&c.progress(b)}_OnJobError(a,b){const c=this._jobPromises.get(a);if(!c)throw new Error("invalid job ID");c.cancelled||c.reject(b),this._jobPromises.delete(a)}_OnJobWorkerReady(){this._isCreatingWorker&&(this._isCreatingWorker=!1,this._jobWorkerCount++,this._jobWorkerCount<this._maxNumWorkers?this._MaybeCreateExtraWorker():this._inputPort.postMessage({"type":"_no_more_workers"}))}async _MaybeCreateExtraWorker(){if(!(this._jobWorkerCount>=this._maxNumWorkers||this._isCreatingWorker||this._hadErrorCreatingWorker||this._jobPromises.size<=this._jobWorkerCount))try{this._isCreatingWorker=!0;const a=await this._runtime.PostComponentMessageToDOMAsync("runtime","create-job-worker");a["outputPort"].onmessage=(a)=>this._OnJobWorkerMessage(a)}catch(a){this._hadErrorCreatingWorker=!0,this._isCreatingWorker=!1,console.error(`[Construct 3] Failed to create job worker; stopping creating any more (created ${this._jobWorkerCount} so far)`,a)}}_TestMessageChannelWorks(){return this._inputPort.postMessage({"type":"_testMessageChannel"}),self.setTimeout(()=>this._CheckMessageChannelTestTimedOut(),2e3),new Promise((a)=>this._testOkResolve=a)}_OnTestMessageChannelOk(){this._testOkResolve(),this._testOkResolve=null}_CheckMessageChannelTestTimedOut(){this._testOkResolve&&(console.warn("MessageChannel determined to be broken. Job scheduler disabled."),this._isBroken=!0,this._testOkResolve(),this._testOkResolve=null)}};
 
 self["C3_Shaders"] = {};
-self["C3_Shaders"]["radialblur"] = {
-	src: "precision mediump float;\nvarying vec2 vTex;\nuniform sampler2D samplerFront;\nuniform vec2 srcStart;\nuniform vec2 srcEnd;\nuniform float layerScale;\nuniform float intensity;\nuniform float radius;\nvoid main(void)\n{\nvec2 dir = ((srcStart + srcEnd) / 2.0 - vTex) / (length(srcEnd - srcStart) / 2.0);\nfloat dist = sqrt(dir.x*dir.x + dir.y*dir.y);\ndir = dir/dist;\nvec4 front = texture2D(samplerFront, vTex);\nvec4 sum = front;\nfloat scaledRadius = radius * layerScale;\nsum += texture2D(samplerFront, vTex + dir * -0.08 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * -0.05 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * -0.03 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * -0.02 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * -0.01 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.01 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.02 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.03 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.05 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.08 * scaledRadius);\nsum /= 11.0;\nfloat t = dist * 2.2;\nt = clamp(t, 0.0, 1.0);\ngl_FragColor = mix(front, mix(front, sum, t), intensity);\n}",
-	extendBoxHorizontal: 50,
-	extendBoxVertical: 50,
-	crossSampling: false,
-	mustPreDraw: false,
-	preservesOpaqueness: false,
-	animated: false,
-	parameters: [["radius",0,"percent"],["intensity",0,"percent"]]
-};
 self["C3_Shaders"]["glowhorizontal"] = {
 	src: "varying mediump vec2 vTex;\nuniform mediump sampler2D samplerFront;\nuniform mediump vec2 pixelSize;\nuniform mediump float intensity;\nvoid main(void)\n{\nmediump vec4 sum = vec4(0.0);\nmediump float pixelWidth = pixelSize.x;\nmediump float halfPixelWidth = pixelWidth / 2.0;\nsum += texture2D(samplerFront, vTex - vec2(pixelWidth * 7.0 + halfPixelWidth, 0.0)) * 0.06;\nsum += texture2D(samplerFront, vTex - vec2(pixelWidth * 5.0 + halfPixelWidth, 0.0)) * 0.10;\nsum += texture2D(samplerFront, vTex - vec2(pixelWidth * 3.0 + halfPixelWidth, 0.0)) * 0.13;\nsum += texture2D(samplerFront, vTex - vec2(pixelWidth * 1.0 + halfPixelWidth, 0.0)) * 0.16;\nmediump vec4 front = texture2D(samplerFront, vTex);\nsum += front * 0.10;\nsum += texture2D(samplerFront, vTex + vec2(pixelWidth * 1.0 + halfPixelWidth, 0.0)) * 0.16;\nsum += texture2D(samplerFront, vTex + vec2(pixelWidth * 3.0 + halfPixelWidth, 0.0)) * 0.13;\nsum += texture2D(samplerFront, vTex + vec2(pixelWidth * 5.0 + halfPixelWidth, 0.0)) * 0.10;\nsum += texture2D(samplerFront, vTex + vec2(pixelWidth * 7.0 + halfPixelWidth, 0.0)) * 0.06;\ngl_FragColor = mix(front, max(front, sum), intensity);\n}",
 	extendBoxHorizontal: 8,
@@ -485,6 +475,26 @@ self["C3_Shaders"]["glowhorizontal"] = {
 	preservesOpaqueness: false,
 	animated: false,
 	parameters: [["intensity",0,"percent"]]
+};
+self["C3_Shaders"]["blurhorizontal"] = {
+	src: "varying mediump vec2 vTex;\nuniform mediump sampler2D samplerFront;\nuniform mediump vec2 pixelSize;\nuniform mediump float intensity;\nvoid main(void)\n{\nmediump vec4 sum = vec4(0.0);\nmediump float pixelWidth = pixelSize.x;\nmediump float halfPixelWidth = pixelWidth / 2.0;\nsum += texture2D(samplerFront, vTex - vec2(pixelWidth * 7.0 + halfPixelWidth, 0.0)) * 0.06;\nsum += texture2D(samplerFront, vTex - vec2(pixelWidth * 5.0 + halfPixelWidth, 0.0)) * 0.10;\nsum += texture2D(samplerFront, vTex - vec2(pixelWidth * 3.0 + halfPixelWidth, 0.0)) * 0.13;\nsum += texture2D(samplerFront, vTex - vec2(pixelWidth * 1.0 + halfPixelWidth, 0.0)) * 0.16;\nmediump vec4 front = texture2D(samplerFront, vTex);\nsum += front * 0.10;\nsum += texture2D(samplerFront, vTex + vec2(pixelWidth * 1.0 + halfPixelWidth, 0.0)) * 0.16;\nsum += texture2D(samplerFront, vTex + vec2(pixelWidth * 3.0 + halfPixelWidth, 0.0)) * 0.13;\nsum += texture2D(samplerFront, vTex + vec2(pixelWidth * 5.0 + halfPixelWidth, 0.0)) * 0.10;\nsum += texture2D(samplerFront, vTex + vec2(pixelWidth * 7.0 + halfPixelWidth, 0.0)) * 0.06;\ngl_FragColor = mix(front, sum, intensity);\n}",
+	extendBoxHorizontal: 8,
+	extendBoxVertical: 0,
+	crossSampling: false,
+	mustPreDraw: false,
+	preservesOpaqueness: false,
+	animated: false,
+	parameters: [["intensity",0,"percent"]]
+};
+self["C3_Shaders"]["radialblur"] = {
+	src: "precision mediump float;\nvarying vec2 vTex;\nuniform sampler2D samplerFront;\nuniform vec2 srcStart;\nuniform vec2 srcEnd;\nuniform float layerScale;\nuniform float intensity;\nuniform float radius;\nvoid main(void)\n{\nvec2 dir = ((srcStart + srcEnd) / 2.0 - vTex) / (length(srcEnd - srcStart) / 2.0);\nfloat dist = sqrt(dir.x*dir.x + dir.y*dir.y);\ndir = dir/dist;\nvec4 front = texture2D(samplerFront, vTex);\nvec4 sum = front;\nfloat scaledRadius = radius * layerScale;\nsum += texture2D(samplerFront, vTex + dir * -0.08 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * -0.05 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * -0.03 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * -0.02 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * -0.01 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.01 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.02 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.03 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.05 * scaledRadius);\nsum += texture2D(samplerFront, vTex + dir * 0.08 * scaledRadius);\nsum /= 11.0;\nfloat t = dist * 2.2;\nt = clamp(t, 0.0, 1.0);\ngl_FragColor = mix(front, mix(front, sum, t), intensity);\n}",
+	extendBoxHorizontal: 50,
+	extendBoxVertical: 50,
+	crossSampling: false,
+	mustPreDraw: false,
+	preservesOpaqueness: false,
+	animated: false,
+	parameters: [["radius",0,"percent"],["intensity",0,"percent"]]
 };
 
 
@@ -614,18 +624,6 @@ self["C3_Shaders"]["glowhorizontal"] = {
 
 "use strict";C3.Behaviors.bound.Exps={};
 
-"use strict";C3.Behaviors.DragnDrop=class extends C3.SDKBehaviorBase{constructor(a){super(a);const b=this._runtime.Dispatcher();this._disposables=new C3.CompositeDisposable(C3.Disposable.From(b,"pointerdown",(a)=>this._OnPointerDown(a.data)),C3.Disposable.From(b,"pointermove",(a)=>this._OnPointerMove(a.data)),C3.Disposable.From(b,"pointerup",(a)=>this._OnPointerUp(a.data,!1)),C3.Disposable.From(b,"pointercancel",(a)=>this._OnPointerUp(a.data,!0)))}Release(){this._disposables.Release(),this._disposables=null,super.Release()}_OnPointerDown(a){this._OnInputDown(a["pointerId"].toString(),a["clientX"]-this._runtime.GetCanvasClientX(),a["clientY"]-this._runtime.GetCanvasClientY())}_OnPointerMove(a){this._OnInputMove(a["pointerId"].toString(),a["clientX"]-this._runtime.GetCanvasClientX(),a["clientY"]-this._runtime.GetCanvasClientY())}_OnPointerUp(a){this._OnInputUp(a["pointerId"].toString())}async _OnInputDown(a,b,c){const d=this.GetInstances();let e=null,f=null,g=0,h=0;for(const i of d){const a=i.GetBehaviorSdkInstanceFromCtor(C3.Behaviors.DragnDrop);if(!a.IsEnabled()||a.IsDragging())continue;const d=i.GetWorldInfo(),j=d.GetLayer(),[k,l]=j.CanvasCssToLayer(b,c,d.GetTotalZElevation());if(!d.ContainsPoint(k,l))continue;if(!e){e=i,f=a,g=k,h=l;continue}const m=e.GetWorldInfo();(j.GetIndex()>m.GetLayer().GetIndex()||j.GetIndex()===m.GetLayer().GetIndex()&&d.GetZIndex()>m.GetZIndex())&&(e=i,f=a,g=k,h=l)}e&&(await f._OnDown(a,g,h))}_OnInputMove(a,b,c){const d=this.GetInstances();for(const e of d){const d=e.GetBehaviorSdkInstanceFromCtor(C3.Behaviors.DragnDrop);if(!d.IsEnabled()||!d.IsDragging()||d.IsDragging()&&d.GetDragSource()!==a)continue;const f=e.GetWorldInfo(),g=f.GetLayer(),[h,i]=g.CanvasCssToLayer(b,c,f.GetTotalZElevation());d._OnMove(h,i)}}async _OnInputUp(a){const b=this.GetInstances();for(const c of b){const b=c.GetBehaviorSdkInstanceFromCtor(C3.Behaviors.DragnDrop);b.IsDragging()&&b.GetDragSource()===a&&(await b._OnUp())}}};
-
-"use strict";C3.Behaviors.DragnDrop.Type=class extends C3.SDKBehaviorTypeBase{constructor(a){super(a)}Release(){super.Release()}OnCreate(){}};
-
-"use strict";{C3.Behaviors.DragnDrop.Instance=class extends C3.SDKBehaviorInstanceBase{constructor(a,b){super(a),this._isDragging=!1,this._dx=0,this._dy=0,this._dragSource="<none>",this._axes=0,this._isEnabled=!0,b&&(this._axes=b[0],this._isEnabled=b[1])}Release(){super.Release()}SaveToJson(){return{"a":this._axes,"e":this._isEnabled}}LoadFromJson(a){this._axes=a["a"],this._isEnabled=a["e"],this._isDragging=!1}IsEnabled(){return this._isEnabled}IsDragging(){return this._isDragging}GetDragSource(){return this._dragSource}async _OnDown(a,b,c){const d=this.GetWorldInfo();this._dx=b-d.GetX(),this._dy=c-d.GetY(),this._isDragging=!0,this._dragSource=a,await this.TriggerAsync(C3.Behaviors.DragnDrop.Cnds.OnDragStart)}_OnMove(a,b){const c=this.GetWorldInfo(),d=a-this._dx,e=b-this._dy;0===this._axes?(c.GetX()!==d||c.GetY()!==e)&&(c.SetXY(d,e),c.SetBboxChanged()):1===this._axes?c.GetX()!==d&&(c.SetX(d),c.SetBboxChanged()):2===this._axes&&c.GetY()!==e&&(c.SetY(e),c.SetBboxChanged())}async _OnUp(){this._isDragging=!1,await this.TriggerAsync(C3.Behaviors.DragnDrop.Cnds.OnDrop)}GetPropertyValueByIndex(a){return a===0?this._axes:1===a?this._isEnabled:void 0}SetPropertyValueByIndex(a,b){a===0?this._axes=b:1===a?this._isEnabled=!!b:void 0}GetDebuggerProperties(){return[{title:"$"+this.GetBehaviorType().GetName(),properties:[{name:"behaviors.dragndrop.debugger.is-dragging",value:this._isDragging},{name:"behaviors.dragndrop.properties.enabled.name",value:this._isEnabled,onedit:(a)=>this._isEnabled=a}]}]}}}
-
-"use strict";C3.Behaviors.DragnDrop.Cnds={IsDragging(){return this._isDragging},OnDragStart(){return!0},OnDrop(){return!0},IsEnabled(){return this._isEnabled}};
-
-"use strict";C3.Behaviors.DragnDrop.Acts={SetEnabled(a){this._isEnabled=!!a,this._isEnabled||(this._isDragging=!1)},SetAxes(b){this._axes=b},Drop(){this._isDragging&&this._OnUp()}};
-
-"use strict";C3.Behaviors.DragnDrop.Exps={};
-
 "use strict";C3.Behaviors.solid=class extends C3.SDKBehaviorBase{constructor(a){super(a)}Release(){super.Release()}};
 
 "use strict";C3.Behaviors.solid.Type=class extends C3.SDKBehaviorTypeBase{constructor(a){super(a)}Release(){super.Release()}OnCreate(){}};
@@ -638,6 +636,18 @@ self["C3_Shaders"]["glowhorizontal"] = {
 
 "use strict";C3.Behaviors.solid.Exps={};
 
+"use strict";C3.Behaviors.DragnDrop=class extends C3.SDKBehaviorBase{constructor(a){super(a);const b=this._runtime.Dispatcher();this._disposables=new C3.CompositeDisposable(C3.Disposable.From(b,"pointerdown",(a)=>this._OnPointerDown(a.data)),C3.Disposable.From(b,"pointermove",(a)=>this._OnPointerMove(a.data)),C3.Disposable.From(b,"pointerup",(a)=>this._OnPointerUp(a.data,!1)),C3.Disposable.From(b,"pointercancel",(a)=>this._OnPointerUp(a.data,!0)))}Release(){this._disposables.Release(),this._disposables=null,super.Release()}_OnPointerDown(a){this._OnInputDown(a["pointerId"].toString(),a["clientX"]-this._runtime.GetCanvasClientX(),a["clientY"]-this._runtime.GetCanvasClientY())}_OnPointerMove(a){this._OnInputMove(a["pointerId"].toString(),a["clientX"]-this._runtime.GetCanvasClientX(),a["clientY"]-this._runtime.GetCanvasClientY())}_OnPointerUp(a){this._OnInputUp(a["pointerId"].toString())}async _OnInputDown(a,b,c){const d=this.GetInstances();let e=null,f=null,g=0,h=0;for(const i of d){const a=i.GetBehaviorSdkInstanceFromCtor(C3.Behaviors.DragnDrop);if(!a.IsEnabled()||a.IsDragging())continue;const d=i.GetWorldInfo(),j=d.GetLayer(),[k,l]=j.CanvasCssToLayer(b,c,d.GetTotalZElevation());if(!d.ContainsPoint(k,l))continue;if(!e){e=i,f=a,g=k,h=l;continue}const m=e.GetWorldInfo();(j.GetIndex()>m.GetLayer().GetIndex()||j.GetIndex()===m.GetLayer().GetIndex()&&d.GetZIndex()>m.GetZIndex())&&(e=i,f=a,g=k,h=l)}e&&(await f._OnDown(a,g,h))}_OnInputMove(a,b,c){const d=this.GetInstances();for(const e of d){const d=e.GetBehaviorSdkInstanceFromCtor(C3.Behaviors.DragnDrop);if(!d.IsEnabled()||!d.IsDragging()||d.IsDragging()&&d.GetDragSource()!==a)continue;const f=e.GetWorldInfo(),g=f.GetLayer(),[h,i]=g.CanvasCssToLayer(b,c,f.GetTotalZElevation());d._OnMove(h,i)}}async _OnInputUp(a){const b=this.GetInstances();for(const c of b){const b=c.GetBehaviorSdkInstanceFromCtor(C3.Behaviors.DragnDrop);b.IsDragging()&&b.GetDragSource()===a&&(await b._OnUp())}}};
+
+"use strict";C3.Behaviors.DragnDrop.Type=class extends C3.SDKBehaviorTypeBase{constructor(a){super(a)}Release(){super.Release()}OnCreate(){}};
+
+"use strict";{C3.Behaviors.DragnDrop.Instance=class extends C3.SDKBehaviorInstanceBase{constructor(a,b){super(a),this._isDragging=!1,this._dx=0,this._dy=0,this._dragSource="<none>",this._axes=0,this._isEnabled=!0,b&&(this._axes=b[0],this._isEnabled=b[1])}Release(){super.Release()}SaveToJson(){return{"a":this._axes,"e":this._isEnabled}}LoadFromJson(a){this._axes=a["a"],this._isEnabled=a["e"],this._isDragging=!1}IsEnabled(){return this._isEnabled}IsDragging(){return this._isDragging}GetDragSource(){return this._dragSource}async _OnDown(a,b,c){const d=this.GetWorldInfo();this._dx=b-d.GetX(),this._dy=c-d.GetY(),this._isDragging=!0,this._dragSource=a,await this.TriggerAsync(C3.Behaviors.DragnDrop.Cnds.OnDragStart)}_OnMove(a,b){const c=this.GetWorldInfo(),d=a-this._dx,e=b-this._dy;0===this._axes?(c.GetX()!==d||c.GetY()!==e)&&(c.SetXY(d,e),c.SetBboxChanged()):1===this._axes?c.GetX()!==d&&(c.SetX(d),c.SetBboxChanged()):2===this._axes&&c.GetY()!==e&&(c.SetY(e),c.SetBboxChanged())}async _OnUp(){this._isDragging=!1,await this.TriggerAsync(C3.Behaviors.DragnDrop.Cnds.OnDrop)}GetPropertyValueByIndex(a){return a===0?this._axes:1===a?this._isEnabled:void 0}SetPropertyValueByIndex(a,b){a===0?this._axes=b:1===a?this._isEnabled=!!b:void 0}GetDebuggerProperties(){return[{title:"$"+this.GetBehaviorType().GetName(),properties:[{name:"behaviors.dragndrop.debugger.is-dragging",value:this._isDragging},{name:"behaviors.dragndrop.properties.enabled.name",value:this._isEnabled,onedit:(a)=>this._isEnabled=a}]}]}}}
+
+"use strict";C3.Behaviors.DragnDrop.Cnds={IsDragging(){return this._isDragging},OnDragStart(){return!0},OnDrop(){return!0},IsEnabled(){return this._isEnabled}};
+
+"use strict";C3.Behaviors.DragnDrop.Acts={SetEnabled(a){this._isEnabled=!!a,this._isEnabled||(this._isDragging=!1)},SetAxes(b){this._axes=b},Drop(){this._isDragging&&this._OnUp()}};
+
+"use strict";C3.Behaviors.DragnDrop.Exps={};
+
 "use strict"
 self.C3_GetObjectRefTable = function () {
 	return [
@@ -645,13 +655,13 @@ self.C3_GetObjectRefTable = function () {
 		C3.Behaviors.custom,
 		C3.Behaviors.EightDir,
 		C3.Behaviors.bound,
-		C3.Behaviors.DragnDrop,
 		C3.Behaviors.solid,
 		C3.Plugins.Text,
 		C3.Plugins.Touch,
 		C3.Plugins.Keyboard,
 		C3.Plugins.Audio,
 		C3.Plugins.Particles,
+		C3.Behaviors.DragnDrop,
 		C3.Plugins.Touch.Cnds.IsTouchingObject,
 		C3.Plugins.System.Acts.SetVar,
 		C3.Plugins.Audio.Acts.Play,
@@ -675,7 +685,8 @@ self.C3_GetObjectRefTable = function () {
 		C3.Plugins.Sprite.Cnds.IsOverlapping,
 		C3.Plugins.System.Acts.RestartLayout,
 		C3.Plugins.Text.Acts.SetText,
-		C3.Plugins.System.Cnds.EveryTick
+		C3.Plugins.System.Cnds.EveryTick,
+		C3.Plugins.Sprite.Acts.SetY
 	];
 };
 self.C3_JsPropNameTable = [
@@ -685,7 +696,6 @@ self.C3_JsPropNameTable = [
 	{Ball: 0},
 	{"8Direction": 0},
 	{BoundToLayout: 0},
-	{DragDrop: 0},
 	{Solid: 0},
 	{Player2: 0},
 	{Title: 0},
@@ -702,11 +712,14 @@ self.C3_JsPropNameTable = [
 	{Player1Goal: 0},
 	{Particles1: 0},
 	{Particles2: 0},
+	{DragDrop: 0},
+	{Grab1: 0},
+	{Grab2: 0},
 	{gameState: 0},
 	{players: 0},
 	{player1Score: 0},
-	{ballPositionY: 0},
-	{player2Score: 0}
+	{player2Score: 0},
+	{ballPositionY: 0}
 ];
 
 "use strict";
@@ -818,7 +831,9 @@ self.C3_JsPropNameTable = [
 		},
 		p => {
 			const f0 = p._GetNode(0).GetBoundMethod();
-			return () => f0((-180), 0);
+			const f1 = p._GetNode(1).GetBoundMethod();
+			const f2 = p._GetNode(2).GetBoundMethod();
+			return () => ((((Math.ceil(f0(0, 1))) === (1) ? 1 : 0)) ? (f1((-65), 65)) : (f2(205, 335)));
 		},
 		p => {
 			const n0 = p._GetNode(0);
